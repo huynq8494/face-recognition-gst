@@ -206,6 +206,7 @@ int main(int argc, char *argv[]) {
     // Build the pipeline with appsink for frame extraction
     const char *launch_string = "filesrc location=/home/huynq/data/videos/test_1280_720_60fps.mp4 ! "
                                 "decodebin ! "
+                                "videoflip method=counterclockwise ! "
                                 "videoconvert ! "
                                 "video/x-raw,format=BGR ! "
                                 "appsink name=sink";
