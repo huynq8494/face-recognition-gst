@@ -14,15 +14,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(rknpu_scrfd_file rknpu2/scrfd_rknn.cc)
 
-add_subdirectory(/home/huynq/rknn_model_zoo/3rdparty/ 3rdparty.out)
-add_subdirectory(/home/huynq/rknn_model_zoo/utils/ utils.out)
+add_subdirectory(/home/hw/rknn_model_zoo/3rdparty/ 3rdparty.out)
+add_subdirectory(/home/hw/rknn_model_zoo/utils/ utils.out)
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
 
 find_package(OpenCV REQUIRED)
 
 # ── ONNX Runtime ──────────────────────────────────────────────
-set(ONNXRUNTIME_DIR "/home/huynq/libs/onnxruntime-linux-aarch64-1.26.0")
+set(ONNXRUNTIME_DIR "/home/hw/libs/onnxruntime-linux-aarch64-1.26.0")
 
 add_executable(${PROJECT_NAME}
     main.cc

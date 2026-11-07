@@ -11,13 +11,8 @@ endif ()
 
 set(rknpu_scrfd_file rknpu2/scrfd_rknn.cc)
 
-add_subdirectory(/home/huynq/rknn_model_zoo/3rdparty/ 3rdparty.out)
-add_subdirectory(/home/huynq/rknn_model_zoo/utils/ utils.out)
-
-set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
-
-file(GLOB SRCS ${CMAKE_CURRENT_SOURCE_DIR}/*.cc)
-
+add_subdirectory(/home/hw/rknn_model_zoo/3rdparty/ 3rdparty.out)
+add_subdirectory(/home/hw/rknn_model_zoo/utils/ utils.out)
 
 add_executable(${PROJECT_NAME}
     main.cc
@@ -27,7 +22,7 @@ add_executable(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     imageutils
     fileutils
-    imagedrawing    
+    imagedrawing
     ${LIBRKNNRT}
     dl
 )

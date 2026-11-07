@@ -93,4 +93,4 @@ test09/cpp/
 - Image height must be resized to 640 for optimal performance
 - Confidence threshold affects detection count (higher = fewer, more confident detections)
 - RGA hardware acceleration may log warnings on some systems; CPU fallback is automatic
-- Default model path: `/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn`
+- Default model path: `/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn`

@@ -25,109 +25,212 @@
 #include "scrfd_rknn.hpp"
 #include "edgeface.hpp"
 #include "face_recognition_system.hpp"
+#include "gst_streamer.hpp"
 #include "image_utils.h"
 #include "file_utils.h"
 #include "image_drawing.h"
-#include "gst_pipeline.hpp"
 
 #include <opencv2/opencv.hpp>
-#include <gst/gst.h>
+#include <gst/app/gstappsink.h>
+#include <gst/video/video.h>
 #include <chrono>
 #include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+class GstInputSource {
+public:
+    GstInputSource(const std::string& uri, bool is_video);
+    ~GstInputSource();
+
+    bool read(cv::Mat& frame);
+    bool isOpened() const { return opened_; }
+    float fps() const { return fps_; }
+    cv::Size frameSize() const { return frame_size_; }
+
+private:
+    std::string buildPipeline(const std::string& uri, bool is_video);
+    bool init(const std::string& uri, bool is_video);
+
+    GstElement* pipeline_ = nullptr;
+    GstElement* appsink_ = nullptr;
+    bool opened_ = false;
+    cv::Size frame_size_ = cv::Size(0, 0);
+    float fps_ = 25.0f;
+};
+
+static std::string gstQuoteUri(const std::string& path) {
+    GError* err = nullptr;
+    gchar* uri = g_filename_to_uri(path.c_str(), nullptr, &err);
+    if (!uri) {
+        std::string msg = err ? err->message : "unknown";
+        if (err) g_error_free(err);
+        throw std::runtime_error("Failed to convert filename to URI: " + msg);
+    }
+    std::string result(uri);
+    g_free(uri);
+    return result;
+}
+
+GstInputSource::GstInputSource(const std::string& uri, bool is_video) {
+    gst_init(nullptr, nullptr);
+    if (!init(uri, is_video)) {
+        throw std::runtime_error("Failed to initialize GStreamer input source");
+    }
+}
+
+GstInputSource::~GstInputSource() {
+    if (pipeline_) {
+        gst_element_set_state(pipeline_, GST_STATE_NULL);
+        gst_object_unref(pipeline_);
+        pipeline_ = nullptr;
+    }
+}
+
+bool GstInputSource::init(const std::string& uri, bool is_video) {
+    std::string pipeline_desc = buildPipeline(uri, is_video);
+    GError* err = nullptr;
+    pipeline_ = gst_parse_launch(pipeline_desc.c_str(), &err);
+    if (!pipeline_) {
+        std::string msg = err ? err->message : "unknown pipeline error";
+        if (err) g_error_free(err);
+        return false;
+    }
+
+    appsink_ = gst_bin_get_by_name(GST_BIN(pipeline_), "sink");
+    if (!appsink_) {
+        gst_object_unref(pipeline_);
+        pipeline_ = nullptr;
+        return false;
+    }
+
+    g_object_set(appsink_,
+                 "emit-signals", false,
+                 "sync", false,
+                 "max-buffers", 1,
+                 "drop", true,
+                 nullptr);
+
+    gst_element_set_state(pipeline_, GST_STATE_PLAYING);
+    opened_ = true;
+    return true;
+}
+
+std::string GstInputSource::buildPipeline(const std::string& uri, bool is_video) {
+    if (uri.rfind("/dev/video", 0) == 0) {
+        return "v4l2src device=" + uri +
+               " ! videoconvert ! video/x-raw,format=BGR ! appsink name=sink";
+    }
+
+    std::string uri_quoted = gstQuoteUri(uri);
+    return "uridecodebin uri=\"" + uri_quoted +
+           "\" ! videoconvert ! video/x-raw,format=BGR ! appsink name=sink";
+}
+
+bool GstInputSource::read(cv::Mat& frame) {
+    if (!opened_ || !appsink_)
+        return false;
+
+    GstSample* sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink_));
+    if (!sample)
+        return false;
+
+    GstCaps* caps = gst_sample_get_caps(sample);
+    if (!caps) {
+        gst_sample_unref(sample);
+        return false;
+    }
+
+    GstVideoInfo info;
+    if (!gst_video_info_from_caps(&info, caps)) {
+        gst_sample_unref(sample);
+        return false;
+    }
+
+    GstBuffer* buffer = gst_sample_get_buffer(sample);
+    if (!buffer) {
+        gst_sample_unref(sample);
+        return false;
+    }
+
+    GstMapInfo map;
+    if (!gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+        gst_sample_unref(sample);
+        return false;
+    }
+
+    if (info.finfo->format != GST_VIDEO_FORMAT_BGR) {
+        gst_buffer_unmap(buffer, &map);
+        gst_sample_unref(sample);
+        return false;
+    }
+
+    cv::Mat mat(info.height, info.width, CV_8UC3, map.data, info.stride[0]);
+    frame = mat.clone();
+
+    if (frame_size_.width == 0 || frame_size_.height == 0) {
+        frame_size_ = cv::Size(info.width, info.height);
+    }
+    if (info.fps_d != 0 && info.fps_n != 0) {
+        fps_ = static_cast<float>(info.fps_n) / static_cast<float>(info.fps_d);
+    }
+
+    gst_buffer_unmap(buffer, &map);
+    gst_sample_unref(sample);
+    return true;
+}
 
 int main(int argc, char **argv)
 {
     // Usage:
     // 1) ./test12 <image_path>
-    //    -> Detection + recognition on image with no gallery
-    // 2) ./test12 <image_path> <conf_threshold>
-    //    -> Detection + recognition on image with custom confidence
-    // 3) ./test12 <video_path>
-    //    -> Real-time face recognition on video (mp4/avi/mov/mkv)
-    // 4) ./test12 <image_or_video> <conf_threshold> <gallery_path>
-    //    -> With face gallery for recognition
+    // 2) ./test12 <video_path> 
     
-    const char *default_scrfd_model = "/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
-    const char *default_edgeface_model = "/home/huynq/models/edgeface/edgeface_xs_gamma_06.onnx";
-    
-    const char *scrfd_model_path = NULL;
-    const char *image_path = NULL;
-    const char *gallery_path = NULL;
+    const char *scrfd_model_path = "/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
+    const char *edgeface_model_path = "/home/hw/models/edgeface/edgeface_xs_gamma_06.onnx";
+    const char *gallery_path = "/home/hw/data/embeddings/face_db_530.bin";
     float conf_thresh = 0.4f;
+    std::string rtp_host = "10.0.0.1";
+    int rtp_port = 5000;
+    int output_fps = 25;
 
-    auto is_number = [](const char *s)->bool{
-        if (!s || !*s) return false;
-        char *endptr = NULL;
-        strtod(s, &endptr);
-        return endptr && *endptr == '\0';
-    };
-
-    // Parse arguments
-    if (argc == 2) {
-        // only image provided -> use default models
-        scrfd_model_path = default_scrfd_model;
-        image_path = argv[1];
-    } else if (argc == 3) {
-        // could be: <model> <image> OR <image> <conf>
-        if (is_number(argv[2])) {
-            scrfd_model_path = default_scrfd_model;
-            image_path = argv[1];
-            conf_thresh = (float)atof(argv[2]);
-        } else {
-            scrfd_model_path = argv[1];
-            image_path = argv[2];
-        }
-    } else if (argc >= 4) {
-        if (is_number(argv[2])) {
-            // <image> <conf> [gallery]
-            scrfd_model_path = default_scrfd_model;
-            image_path = argv[1];
-            conf_thresh = (float)atof(argv[2]);
-            if (argc >= 4) gallery_path = argv[3];
-        } else {
-            // <model> <image> <conf> [gallery]
-            scrfd_model_path = argv[1];
-            image_path = argv[2];
-            if (is_number(argv[3])) conf_thresh = (float)atof(argv[3]);
-            if (argc >= 5) gallery_path = argv[4];
-        }
-    } else {
+    if (argc < 2) {
         printf("SCRFD + EdgeFace Recognition Demo (Image & Video)\n");
         printf("Usage:\n");
-        printf("  %s <image_path>                                    [image only]\n", argv[0]);
-        printf("  %s <image_path> <conf_threshold>                   [image with confidence]\n", argv[0]);
-        printf("  %s <image_path> <conf_threshold> <gallery_path>    [image with gallery]\n", argv[0]);
-        printf("  %s <video_path>                                    [video: mp4/avi/mov/mkv]\n", argv[0]);
-        printf("  %s <video_path> <conf_threshold>                   [video with confidence]\n", argv[0]);
-        printf("  %s <video_path> <conf_threshold> <gallery_path>    [video with gallery]\n", argv[0]);
-        printf("\nDefault SCRFD model: %s\n", default_scrfd_model);
-        printf("Default EdgeFace model: %s\n", default_edgeface_model);
-        printf("Default confidence threshold: %.2f\n", conf_thresh);
-        return -1;
+        printf("  %s <input_path>                                    [image only]\n", argv[0]);
+        printf("  %s <video_path>                                    [video: mp4/avi/mov/mkv or /dev/video*]\n", argv[0]);
+        return 0;
     }
 
-    // Check if input is image or video/stream
+    const char *input_path = argv[1];
+
+    for (int i = 0; i < argc; i ++) {
+        printf("argv[%d]=%s\n", i, argv[i]);
+    }
+
+    bool use_rtp = !rtp_host.empty() && rtp_port > 0;
+
+    // Check if input is image or video
     bool is_video = false;
-    const char *ext = strrchr(image_path, '.');
+    const char *ext = strrchr(input_path, '.');
     if (ext && (strcasecmp(ext, ".mp4") == 0 || strcasecmp(ext, ".avi") == 0 || 
                 strcasecmp(ext, ".mov") == 0 || strcasecmp(ext, ".mkv") == 0)) {
         is_video = true;
-    } else if (strncasecmp(image_path, "rtsp://", 7) == 0 ||
-               strncmp(image_path, "/dev/video", 10) == 0) {
+    }
+    if (strncmp(input_path, "/dev/video", 10) == 0) {
         is_video = true;
     }
 
-    gst_init(&argc, &argv);
-
     try {
         // Initialize detectors
-        printf("\n[Init] Loading SCRFD RKNN model...\n");
+        printf("\n[Init] Loading SCRFD RKNN model %s:...\n", scrfd_model_path);
         SCRFD_RKNN detector(scrfd_model_path);
         
         printf("[Init] Loading EdgeFace ONNX model...\n");
-        EdgeFace recognizer(default_edgeface_model);
         
         // Create recognition system
+        EdgeFace recognizer(edgeface_model_path);
         printf("[Init] Creating FaceRecognitionSystem...\n");
         FaceRecognitionSystem system(
             detector, recognizer,
@@ -136,6 +239,9 @@ int main(int argc, char **argv)
             /*iou_thresh=*/     0.4f,
             /*max_lost=*/       10,
             /*min_hits=*/       3);
+
+        std::unique_ptr<GstRtpStreamer> streamer;
+        bool show_window = !use_rtp;
         
         // Load gallery if provided
         if (gallery_path) {
@@ -149,21 +255,17 @@ int main(int argc, char **argv)
 
         if (!is_video) {
             // Process image
-            printf("\n[Processing] Image: %s\n", image_path);
-            
-            // Check if file exists first
-            FILE* test_file = fopen(image_path, "rb");
-            if (!test_file) {
-                printf("Error: Cannot open file (permission/not found): %s\n", image_path);
+            printf("\n[Processing] Image: %s\n", input_path);
+
+            GstInputSource source(input_path, false);
+            if (!source.isOpened()) {
+                printf("Error: Failed to open image input with GStreamer: %s\n", input_path);
                 return -1;
             }
-            fclose(test_file);
-            
-            cv::Mat image = cv::imread(image_path, cv::IMREAD_COLOR);
-            if (image.empty()) {
-                printf("Error: Failed to decode image with cv::imread(): %s\n", image_path);
-                printf("Note: OpenCV may be missing JPEG/PNG codec support\n");
-                printf("Try installing: sudo apt-get install libopencv-dev libjasper1 libtiff5\n");
+
+            cv::Mat image;
+            if (!source.read(image) || image.empty()) {
+                printf("Error: Failed to read image frame via GStreamer: %s\n", input_path);
                 return -1;
             }
             printf("Image loaded: %d x %d\n", image.cols, image.rows);
@@ -192,65 +294,97 @@ int main(int argc, char **argv)
             std::string output_path = "output_recognized.png";
             cv::imwrite(output_path, vis);
             printf("\n[Output] Saved to: %s\n", output_path);
-            
-            // Display (if possible)
-            cv::imshow("Face Recognition Results", vis);
-            printf("[Display] Press any key to exit...\n");
-            cv::waitKey(0);
-            cv::destroyAllWindows();
+
+            if (use_rtp) {
+                streamer = std::make_unique<GstRtpStreamer>(rtp_host, rtp_port,
+                    vis.cols, vis.rows, output_fps);
+                streamer->pushFrame(vis);
+                printf("[RTP] Sent image frame to %s:%d\n", rtp_host.c_str(), rtp_port);
+            } else {
+                // Display (if possible)
+                cv::imshow("Face Recognition Results", vis);
+                printf("[Display] Press any key to exit...\n");
+                cv::waitKey(0);
+                cv::destroyAllWindows();
+            }
 
         } else {
-            // Process video / stream via GStreamer pipeline
-            printf("\n[Processing] Video/stream: %s\n", image_path);
+            // Process video
+            printf("\n[Processing] Video: %s\n", input_path);
+            GstInputSource source(input_path, true);
+            if (!source.isOpened()) {
+                printf("Failed to open video input with GStreamer: %s\n", input_path);
+                return -1;
+            }
 
             int frame_count = 0;
             int total_faces = 0;
             double total_time = 0.0;
             FPSCounter fps_counter(50, 100);
-            std::atomic<bool> quit{false};
 
-            cv::namedWindow("Face Recognition - Video", cv::WINDOW_AUTOSIZE);
+            if (show_window) {
+                cv::namedWindow("Face Recognition - Video", cv::WINDOW_AUTOSIZE);
+            }
 
-            auto on_frame = [&](const cv::Mat& frame) {
-                if (quit) return;
+            cv::Mat frame;
+            if (!source.read(frame) || frame.empty()) {
+                printf("Failed to read first video frame: %s\n", input_path);
+                return -1;
+            }
 
+            double input_fps = source.fps();
+            if (input_fps > 1.0)
+                output_fps = (int)input_fps;
+
+            printf("Video properties:\n");
+            printf("  FPS: %.2f\n", input_fps);
+            printf("  Width: %d, Height: %d\n", source.frameSize().width, source.frameSize().height);
+            printf("  Total frames: unknown\n");
+            printf("\nProcessing%s...\n", show_window ? " (press ESC to stop)" : "");
+
+            do {
                 frame_count++;
+                
                 auto start = std::chrono::high_resolution_clock::now();
                 std::vector<FaceResult> results = system.processFrame(frame, conf_thresh, cv::Size(640, 640));
                 auto end = std::chrono::high_resolution_clock::now();
                 float inference_time = std::chrono::duration<float>(end - start).count() * 1000.0f;
-
+                
                 total_time += inference_time;
                 total_faces += results.size();
                 fps_counter.tick();
-
+                
                 // Draw visualization
                 cv::Mat vis = FaceRecognitionSystem::draw(frame, results, fps_counter.fps, fps_counter.avg_fps);
+                
+                if (use_rtp && !streamer) {
+                    streamer = std::make_unique<GstRtpStreamer>(rtp_host, rtp_port,
+                        vis.cols, vis.rows, output_fps);
+                    printf("[RTP] Streaming to %s:%d\n", rtp_host.c_str(), rtp_port);
+                }
 
+                if (use_rtp) {
+                    streamer->pushFrame(vis);
+                }
+
+                // Print frame info every 10 frames
                 if (frame_count % 10 == 0) {
                     printf("[Frame %4d] Faces: %zu | FPS: %.1f | Avg: %.1f\n",
                            frame_count, results.size(), fps_counter.fps, fps_counter.avg_fps);
                 }
-
-                cv::imshow("Face Recognition - Video", vis);
-                int key = cv::waitKey(1);
-                if (key == 27 || key == 'q') {
-                    printf("\nStopped by user\n");
-                    quit = true;
+                
+                if (show_window) {
+                    cv::imshow("Face Recognition - Video", vis);
+                    int key = cv::waitKey(1);
+                    if (key == 27) { // ESC
+                        printf("\nStopped by user\n");
+                        break;
+                    }
                 }
-            };
+            } while (source.read(frame));
 
-            FaceGstPipeline pipeline(image_path, on_frame);
-            std::thread gst_thread([&]{ pipeline.run(); });
-
-            while (!quit) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-
-            pipeline.stop();
-            gst_thread.join();
             cv::destroyAllWindows();
-
+            
             printf("\n[Video Summary]\n");
             printf("  Frames processed: %d\n", frame_count);
             printf("  Total faces detected: %d\n", total_faces);

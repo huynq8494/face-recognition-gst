@@ -15,7 +15,7 @@ pkg_search_module(GSTVIDEO REQUIRED IMPORTED_TARGET gstreamer-video-1.0)
 find_package(OpenCV REQUIRED)
 
 # ── ONNX Runtime ──────────────────────────────────────────────
-set(ONNXRUNTIME_DIR "/home/huynq/libs/onnxruntime-linux-aarch64-1.26.0")
+set(ONNXRUNTIME_DIR "/home/hw/libs/onnxruntime-linux-aarch64-1.26.0")
 
 # ── Sources ───────────────────────────────────────────────────
 add_executable(${PROJECT_NAME}

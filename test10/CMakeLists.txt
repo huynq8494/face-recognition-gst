@@ -15,7 +15,7 @@ pkg_search_module(GSTVIDEO REQUIRED IMPORTED_TARGET gstreamer-video-1.0)
 find_package(OpenCV REQUIRED)
 
 # ── ONNX Runtime ──────────────────────────────────────────────
-set(ONNXRUNTIME_DIR "/home/huynq/libs//onnxruntime-linux-aarch64-1.26.0")
+set(ONNXRUNTIME_DIR "/home/hw/libs//onnxruntime-linux-aarch64-1.26.0")
 
 # ── Sources ───────────────────────────────────────────────────
 add_executable(${PROJECT_NAME}
@@ -43,8 +43,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 
 # Add RKNN SCRFD sources and libs (optional, used when building with RKNN models)
 set(rknpu_scrfd_file ${CMAKE_CURRENT_SOURCE_DIR}/rknpu2/scrfd_rknn.cc)
-add_subdirectory(/home/huynq/rknn_model_zoo/3rdparty/ 3rdparty.out)
-add_subdirectory(/home/huynq/rknn_model_zoo/utils/ utils.out)
+add_subdirectory(/home/hw/rknn_model_zoo/3rdparty/ 3rdparty.out)
+add_subdirectory(/home/hw/rknn_model_zoo/utils/ utils.out)
 target_sources(${PROJECT_NAME} PRIVATE ${rknpu_scrfd_file})
 target_link_libraries(${PROJECT_NAME} PRIVATE imageutils fileutils imagedrawing ${LIBRKNNRT} dl)
 target_include_directories(${PROJECT_NAME} PRIVATE ${LIBRKNNRT_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/rknpu2)

@@ -36,12 +36,12 @@ int main(int argc, char **argv)
 {
     // Usage:
     // 1) ./test09 <image_path>
-    //    -> Uses default SCRFD model: /home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn
+    //    -> Uses default SCRFD model: /home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn
     // 2) ./test09 <image_path> <conf_threshold>
     //    -> Uses default SCRFD model with custom confidence (0.0-1.0)
     // 3) ./test09 <model_path> <image_path> [conf_threshold]
     //    -> Uses specified RKNN model
-    const char *default_model_path = "/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
+    const char *default_model_path = "/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
 
     const char *model_path = NULL;
     const char *image_path = NULL;

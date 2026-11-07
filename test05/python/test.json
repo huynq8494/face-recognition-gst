@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "emb_dim": 512,
+  "num_ids": 2,
+  "identities": {
+    "aCUong": {
+      "num_embeddings": 1
+    },
+    "aCuong": {
+      "num_embeddings": 5
+    }
+  }
+}

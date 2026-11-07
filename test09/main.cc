@@ -1,20 +1,3 @@
-// Copyright (c) 2023 by Rockchip Electronics Co., Ltd. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-/*-------------------------------------------
-                Includes
--------------------------------------------*/
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,61 +8,11 @@
 #include "file_utils.h"
 #include "image_drawing.h"
 
-
-/*-------------------------------------------
-              SCRFD Face Detection Demo
--------------------------------------------*/
 int main(int argc, char **argv)
 {
-    // Usage:
-    // 1) ./test09 <image_path>
-    //    -> Uses default SCRFD model: /home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn
-    // 2) ./test09 <image_path> <conf_threshold>
-    //    -> Uses default SCRFD model with custom confidence (0.0-1.0)
-    // 3) ./test09 <model_path> <image_path> [conf_threshold]
-    //    -> Uses specified RKNN model
-    const char *default_model_path = "/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
-
-    const char *model_path = NULL;
-    const char *image_path = NULL;
-
-    auto is_number = [](const char *s)->bool{
-        if (!s || !*s) return false;
-        char *endptr = NULL;
-        strtod(s, &endptr);
-        return endptr && *endptr == '\0';
-    };
-
-    float conf_thresh = 0.4f;
-
-    if (argc == 2) {
-        // only image provided -> use default model
-        model_path = default_model_path;
-        image_path = argv[1];
-    } else if (argc == 3) {
-        // could be: <model> <image> OR <image> <conf>
-        if (is_number(argv[2])) {
-            model_path = default_model_path;
-            image_path = argv[1];
-            conf_thresh = (float)atof(argv[2]);
-        } else {
-            model_path = argv[1];
-            image_path = argv[2];
-        }
-    } else if (argc == 4) {
-        model_path = argv[1];
-        image_path = argv[2];
-        if (is_number(argv[3])) conf_thresh = (float)atof(argv[3]);
-    } else {
-        printf("SCRFD Face Detection Demo\n");
-        printf("Usage:\n");
-        printf("  %s <image_path>\n", argv[0]);
-        printf("  %s <image_path> <conf_threshold>\n", argv[0]);
-        printf("  %s <model_path> <image_path> [conf_threshold]\n", argv[0]);
-        printf("Default model: %s\n", default_model_path);
-        return -1;
-    }
-    
+    const char *model_path = "/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
+    const char *image_path = (argc <= 1) ? "/home/hw/data/images/scrfd_test.jpg" : argv[1];
+    float conf_thresh = (argc <= 2) ? 0.4f : std::atof(argv[2]);
 
     int ret;
     rknn_app_context_t rknn_app_ctx;
@@ -95,7 +28,6 @@ int main(int argc, char **argv)
     image_buffer_t src_image;
     memset(&src_image, 0, sizeof(image_buffer_t));
     ret = read_image(image_path, &src_image);
-
     if (ret != 0)
     {
         printf("read image fail! ret=%d image_path=%s\n", ret, image_path);

@@ -68,7 +68,7 @@ Face Recognition Results
 ## Build Instructions
 
 ```bash
-cd /home/huynq/rknn_model_zoo/examples/test12/cpp
+cd /home/hw/rknn_model_zoo/examples/test12/cpp
 mkdir -p build
 cd build
 cmake ..
@@ -99,8 +99,8 @@ make -j4
 
 ## Model Requirements
 
-- **SCRFD RKNN**: `/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn`
-- **EdgeFace ONNX**: `/home/huynq/models/edgeface/edgeface_xs_gamma_06.onnx`
+- **SCRFD RKNN**: `/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn`
+- **EdgeFace ONNX**: `/home/hw/models/edgeface/edgeface_xs_gamma_06.onnx`
 
 ## Dependencies
 

@@ -1,4 +1,4 @@
-#include "scrfd.hpp"
+#include "scrfd_rknn.hpp"
 #include "rknpu2/scrfd_rknn.h"
 #include "image_utils.h"
 #include <cstring>

@@ -45,8 +45,8 @@ int main(int argc, char **argv)
     // 4) ./test12 <image_or_video> <conf_threshold> <gallery_path>
     //    -> With face gallery for recognition
     
-    const char *default_scrfd_model = "/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
-    const char *default_edgeface_model = "/home/huynq/models/edgeface/edgeface_xs_gamma_06.onnx";
+    const char *default_scrfd_model = "/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
+    const char *default_edgeface_model = "/home/hw/models/edgeface/edgeface_xs_gamma_06.onnx";
     
     const char *scrfd_model_path = NULL;
     const char *image_path = NULL;

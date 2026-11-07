@@ -13,8 +13,8 @@ int main(int argc, char* argv[]) {
     gst_init(&argc, &argv);
 
     // ── Models ────────────────────────────────────────────────
-    const std::string scrfd_model = "/home/huynq/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
-    const std::string edgeface_model = "/home/huynq/models/edgeface/edgeface_xs_gamma_06.onnx";
+    const std::string scrfd_model = "/home/hw/models/scrfd/scrfd_500m_bnkps_shape640x640.rknn";
+    const std::string edgeface_model = "/home/hw/models/edgeface/edgeface_xs_gamma_06.onnx";
 
     std::unique_ptr<SCRFD> detector;
     std::unique_ptr<EdgeFace> recognizer;
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
         /*max_lost=*/       10,
         /*min_hits=*/       3);
 
-    system.loadGallery("/home/huynq/data/embeddings/face_db.bin");
+    system.loadGallery("/home/hw/data/embeddings/face_db.bin");
 
     // ── FPS ───────────────────────────────────────────────────
     FPSCounter fps_counter(/*warmup=*/100, /*window=*/200);
@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
     };
 
     // ── Pipeline ──────────────────────────────────────────────
-    std::string uri = "/home/huynq/data/videos/test_domain.mp4";
+    std::string uri = "/home/hw/data/videos/test_domain.mp4";
     if (argc > 1) uri = argv[1];   // optional override from CLI
 
     try {

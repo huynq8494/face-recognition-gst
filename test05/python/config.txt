@@ -1,0 +1,4 @@
+use_tracker=0
+iou_thresh=0.4
+max_lost=2
+min_hits=3
